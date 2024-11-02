@@ -4,9 +4,9 @@ use anyhow::Context;
 use futures::executor::block_on;
 use tracing::{debug, warn};
 use wgpu::{
-    util::DeviceExt, Adapter, ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d,
-    Features, Limits, PipelineCompilationOptions, Queue, RequestAdapterOptions,
-    ShaderModuleDescriptor, TextureDescriptor, TextureUsages,
+    util::DeviceExt, ComputePipelineDescriptor, DeviceDescriptor, Extent3d, Features, Limits,
+    PipelineCompilationOptions, RequestAdapterOptions, ShaderModuleDescriptor, TextureDescriptor,
+    TextureUsages,
 };
 
 use crate::TextureHeader;
@@ -20,25 +20,6 @@ pub struct TextureConverter {
 }
 
 impl TextureConverter {
-    fn request_adapter(adapter: &Adapter, features: Features) -> anyhow::Result<(Device, Queue)> {
-        let result = block_on(adapter.request_device(
-            &DeviceDescriptor {
-                label: Some("Texture Converter Device"),
-                required_features: Features::TEXTURE_COMPRESSION_ASTC
-                // | Features::TEXTURE_COMPRESSION_ASTC_HDR
-                | Features::TEXTURE_COMPRESSION_BC,
-                required_limits: Limits {
-                    max_texture_dimension_2d: 4096,
-                    ..Limits::downlevel_defaults()
-                },
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))?;
-
-        Ok(result)
-    }
-
     pub fn new() -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::GL,
@@ -50,7 +31,7 @@ impl TextureConverter {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 ..Default::default()
             }))
-            .context("Couldn't get wpgu adapter")?;
+            .context("Couldn't get wgpu adapter")?;
 
         let mut features = Features::TEXTURE_COMPRESSION_BC;
         if adapter
@@ -84,7 +65,7 @@ impl TextureConverter {
             label: Some("Texture converter pipeline"),
             layout: None,
             module: &shader,
-            entry_point: Some("convert_main"),
+            entry_point: "convert_main",
             compilation_options: PipelineCompilationOptions::default(),
             cache: None,
         });

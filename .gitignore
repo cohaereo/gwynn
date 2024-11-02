@@ -1,4 +1,5 @@
 LocalData/
+Resources/
 **/target
 
 *.exe
