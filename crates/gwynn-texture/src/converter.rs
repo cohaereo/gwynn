@@ -2,11 +2,11 @@ use std::io::Cursor;
 
 use anyhow::Context;
 use futures::executor::block_on;
-use tracing::{debug, info};
+use tracing::{debug, warn};
 use wgpu::{
-    util::DeviceExt, ComputePipelineDescriptor, DeviceDescriptor, Extent3d, Features, Limits,
-    PipelineCompilationOptions, RequestAdapterOptions, ShaderModuleDescriptor, TextureDescriptor,
-    TextureUsages,
+    util::DeviceExt, Adapter, ComputePipelineDescriptor, Device, DeviceDescriptor, Extent3d,
+    Features, Limits, PipelineCompilationOptions, Queue, RequestAdapterOptions,
+    ShaderModuleDescriptor, TextureDescriptor, TextureUsages,
 };
 
 use crate::TextureHeader;
@@ -20,11 +20,31 @@ pub struct TextureConverter {
 }
 
 impl TextureConverter {
+    fn request_adapter(adapter: &Adapter, features: Features) -> anyhow::Result<(Device, Queue)> {
+        let result = block_on(adapter.request_device(
+            &DeviceDescriptor {
+                label: Some("Texture Converter Device"),
+                required_features: Features::TEXTURE_COMPRESSION_ASTC
+                // | Features::TEXTURE_COMPRESSION_ASTC_HDR
+                | Features::TEXTURE_COMPRESSION_BC,
+                required_limits: Limits {
+                    max_texture_dimension_2d: 4096,
+                    ..Limits::downlevel_defaults()
+                },
+                memory_hints: wgpu::MemoryHints::Performance,
+            },
+            None,
+        ))?;
+
+        Ok(result)
+    }
+
     pub fn new() -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::GL,
             ..Default::default()
         });
+
         let adapter =
             futures::executor::block_on(instance.request_adapter(&RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -32,12 +52,20 @@ impl TextureConverter {
             }))
             .context("Couldn't get wpgu adapter")?;
 
+        let mut features = Features::TEXTURE_COMPRESSION_BC;
+        if adapter
+            .features()
+            .contains(Features::TEXTURE_COMPRESSION_ASTC)
+        {
+            features |= Features::TEXTURE_COMPRESSION_ASTC;
+        } else {
+            warn!("GPU does not support ASTC textures. Decoding will be done on the CPU");
+        };
+
         let (device, queue) = block_on(adapter.request_device(
             &DeviceDescriptor {
                 label: Some("Texture Converter Device"),
-                required_features: Features::TEXTURE_COMPRESSION_ASTC
-                    // | Features::TEXTURE_COMPRESSION_ASTC_HDR
-                    | Features::TEXTURE_COMPRESSION_BC,
+                required_features: features,
                 required_limits: Limits {
                     max_texture_dimension_2d: 4096,
                     ..Limits::downlevel_defaults()
@@ -73,23 +101,31 @@ impl TextureConverter {
     pub fn convert(&self, data: &[u8], header: &TextureHeader) -> anyhow::Result<Vec<u8>> {
         debug!("Converting texture");
 
-        // TODO: Fall back when ASTC isn't supported by the device
-        // if header.format.is_astc() && !header.format.is_hdr() {
-        //     info!("Using ASTC software decoder");
-        //     let mut image = vec![0u8; header.width as usize * header.height as usize * 4];
-        //     astc_decode::astc_decode(
-        //         Cursor::new(&data),
-        //         header.width as _,
-        //         header.height as _,
-        //         header.format.astc_footprint().unwrap(),
-        //         |x, y, pixel| {
-        //             let offset = (y * header.width as u32 + x) as usize * 4;
-        //             image[offset..offset + 4].copy_from_slice(&pixel);
-        //         },
-        //     )?;
+        if header.format.is_hdr() {
+            anyhow::bail!("HDR textures are not supported");
+        }
 
-        //     return Ok(image);
-        // };
+        if header.format.is_astc()
+            && !self
+                .device
+                .features()
+                .contains(Features::TEXTURE_COMPRESSION_ASTC)
+        {
+            debug!("Using ASTC software decoder");
+            let mut image = vec![0u8; header.width as usize * header.height as usize * 4];
+            astc_decode::astc_decode(
+                Cursor::new(&data),
+                header.width as _,
+                header.height as _,
+                header.format.astc_footprint().unwrap(),
+                |x, y, pixel| {
+                    let offset = (y * header.width as u32 + x) as usize * 4;
+                    image[offset..offset + 4].copy_from_slice(&pixel);
+                },
+            )?;
+
+            return Ok(image);
+        };
 
         let format = header.format.to_wgpu().with_context(|| {
             format!(
