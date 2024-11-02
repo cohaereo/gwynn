@@ -1,0 +1,8 @@
+LocalData/
+**/target
+
+*.exe
+*.so
+*.dll
+*.rlib
+*.pyc

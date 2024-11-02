@@ -1,0 +1,29 @@
+[package]
+name = "gwynn"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["crates/gwynn-mpk", "crates/gwynn-texture", "crates/gwynn-model"]
+
+[workspace.dependencies]
+anyhow = "1.0.91"
+binrw = "0.14.1"
+bytemuck = "1.19.0"
+tracing = "0.1.40"
+wgpu = "23"
+
+[dependencies]
+anyhow.workspace = true
+binrw.workspace = true
+# eframe = "0.29.1"
+glob = "0.3.1"
+gwynn-mpk = { path = "./crates/gwynn-mpk" }
+gwynn-model = { path = "./crates/gwynn-model" }
+gwynn-texture = { path = "./crates/gwynn-texture" }
+hex = "0.4.3"
+# image = { version = "0.25.4", features = ["png"], default-features = false }
+rayon = "1.10.0"
+rmp = "0.8.14"
+tracing.workspace = true
+tracing-subscriber = "0.3.18"
