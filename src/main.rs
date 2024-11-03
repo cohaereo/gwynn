@@ -153,11 +153,35 @@ impl GwynnApp {
                             if let Err(e) = self.extract_texture(file) {
                                 error!("Failed to convert texture: {e}");
                             }
+                        } else {
+                            if let Err(e) = self.extract_file(file) {
+                                error!("Failed to extract file: {e}");
+                            }
                         }
                     }
                 }
             },
         );
+    }
+
+    fn extract_file(&self, file: &FileEntry) -> anyhow::Result<()> {
+        let data = File::open(&file.data_file)?;
+
+        let mut buf = vec![0; file.info.length as usize];
+        data.seek_read(&mut buf, file.info.offset)?;
+
+        info!(
+            "Compression {:?} - {}",
+            gwynn_mpk::compression::CompressionType::guess_from_slice(&buf),
+            &file.info.path
+        );
+        let decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
+
+        let out_file = Path::new("dump").join(&file.name);
+        std::fs::create_dir_all(out_file.parent().unwrap())?;
+        std::fs::write(&out_file, &decompressed)?;
+
+        Ok(())
     }
 
     fn extract_texture(&self, file: &FileEntry) -> anyhow::Result<()> {
