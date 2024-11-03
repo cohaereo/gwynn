@@ -1,9 +1,10 @@
 pub mod compression;
+pub mod indexer;
 
 use binrw::binread;
 
 #[binread]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EntryHeader {
     #[br(temp)]
     path_len: u32,

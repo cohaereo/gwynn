@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 binrw.workspace = true
-tracing.workspace = true
 flate2 = "1.0.34"
-zstd = "0.13.2"
+hashbrown.workspace = true
 lz4_flex = "0.11.3"
+tracing.workspace = true
+uuid.workspace = true
+zstd = "0.13.2"

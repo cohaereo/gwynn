@@ -10,7 +10,7 @@ impl LoadingCircle {
     /// The amount of circles
     const AMOUNT: usize = 2;
     /// The time it takes for one circle to go from min to max radius
-    const SPEED: f32 = 0.8;
+    const SPEED: f32 = 1.5;
     /// The time delay between each circle
     const DELAY: f32 = Self::SPEED / Self::AMOUNT as f32;
 
