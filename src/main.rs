@@ -1,12 +1,12 @@
-pub mod directory;
-pub mod filetype;
-pub mod icons;
-pub mod ui;
+mod directory;
+mod filetype;
+mod icons;
+mod io;
+mod ui;
 
 use std::{
     fs::File,
     io::Cursor,
-    os::windows::fs::FileExt,
     path::{Path, PathBuf},
 };
 
@@ -21,6 +21,7 @@ use icons::{
     ICON_BOX, ICON_CROSS, ICON_ECLIPSE, ICON_FILE_QUESTION, ICON_FILM, ICON_FOLDER, ICON_IMAGE,
     ICON_PERSON_STANDING, ICON_SETTINGS, ICON_SHAPES,
 };
+use io::ReaderExt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use ui::loading_circle::LoadingCircle;
 
@@ -54,6 +55,8 @@ fn main() -> anyhow::Result<()> {
 struct GwynnApp {
     root_dir: Directory,
     texture_converter: TextureConverter,
+    preview_texture: Option<(String, egui::TextureId)>,
+    wgpu_renderstate: eframe::egui_wgpu::RenderState,
 }
 
 impl GwynnApp {
@@ -123,6 +126,8 @@ impl GwynnApp {
         Ok(Self {
             root_dir,
             texture_converter: TextureConverter::new()?,
+            preview_texture: None,
+            wgpu_renderstate: cc.wgpu_render_state.as_ref().unwrap().clone(),
         })
     }
 
@@ -153,10 +158,8 @@ impl GwynnApp {
                             if let Err(e) = self.extract_texture(file) {
                                 error!("Failed to convert texture: {e}");
                             }
-                        } else {
-                            if let Err(e) = self.extract_file(file) {
-                                error!("Failed to extract file: {e}");
-                            }
+                        } else if let Err(e) = self.extract_file(file) {
+                            error!("Failed to extract file: {e}");
                         }
                     }
                 }
@@ -165,7 +168,8 @@ impl GwynnApp {
     }
 
     fn extract_file(&self, file: &FileEntry) -> anyhow::Result<()> {
-        let data = File::open(&file.data_file)?;
+        // self.wgpu_renderstate.
+        let mut data = File::open(&file.data_file)?;
 
         let mut buf = vec![0; file.info.length as usize];
         data.seek_read(&mut buf, file.info.offset)?;
@@ -185,7 +189,7 @@ impl GwynnApp {
     }
 
     fn extract_texture(&self, file: &FileEntry) -> anyhow::Result<()> {
-        let data = File::open(&file.data_file)?;
+        let mut data = File::open(&file.data_file)?;
 
         let mut buf = vec![0; file.info.length as usize];
         data.seek_read(&mut buf, file.info.offset)?;
@@ -196,6 +200,10 @@ impl GwynnApp {
             &file.info.path
         );
         let mut decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
+
+        let out_file = Path::new("dump").join(&file.name);
+        std::fs::create_dir_all(out_file.parent().unwrap())?;
+        std::fs::write(&out_file, &decompressed)?;
 
         let mut c = Cursor::new(&decompressed);
 
@@ -240,12 +248,20 @@ impl GwynnApp {
 
 impl eframe::App for GwynnApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for d in self.root_dir.subdirectories.values() {
-                    self.show_directory(ui, d);
-                }
+        egui::SidePanel::left("file_selector")
+            .min_width(384.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        for d in self.root_dir.subdirectories.values() {
+                            self.show_directory(ui, d);
+                        }
+                    });
             });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Hey");
         });
 
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {

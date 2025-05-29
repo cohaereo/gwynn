@@ -1,9 +1,3 @@
-LocalData/
-Resources/
-**/target
-
-*.exe
-*.so
-*.dll
-*.rlib
-*.pyc
+target
+LocalData
+dump

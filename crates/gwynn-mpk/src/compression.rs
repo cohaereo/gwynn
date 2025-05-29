@@ -48,15 +48,11 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<[u8]>> {
 
             Ok(result_buf.into())
         }
-        c @ Some(CompressionType::Lz4 | CompressionType::G108Lz4) => {
+        Some(c @ (CompressionType::Lz4 | CompressionType::G108Lz4)) => {
             let mut v = [0u8; 4];
             v.copy_from_slice(&buf[4..8]);
             let uncompressed_size = u32::from_le_bytes(v);
-            let input = if c.unwrap().is_g108() {
-                unxor(buf)
-            } else {
-                &buf[8..]
-            };
+            let input = if c.is_g108() { unxor(buf) } else { &buf[8..] };
 
             let decompressed_bytes = lz4_flex::decompress(input, uncompressed_size as usize)?;
 
@@ -65,12 +61,14 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<[u8]>> {
         Some(CompressionType::Lzma) => {
             todo!("lzma");
         }
-        c @ Some(CompressionType::Zstd | CompressionType::G108Zstd) => {
+        Some(c @ (CompressionType::Zstd | CompressionType::G108Zstd)) => {
             let mut v = [0u8; 4];
             v.copy_from_slice(&buf[4..8]);
             let uncompressed_size = u32::from_le_bytes(v);
-            let input = if c.unwrap().is_g108() {
-                unxor(buf)
+            let input = if c.is_g108() {
+                unxor(buf);
+                buf[0..4].copy_from_slice(b"ZSTD");
+                &buf[8..]
             } else {
                 &buf[8..]
             };
@@ -87,13 +85,22 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<[u8]>> {
     }
 }
 
+const XOR_KEY: &[u8] = &[
+    0xA1, 0xBB, 0x22, 0x24, 0x40, 0x59, 0x4B, 0xE9, 0x7B, 0x38, 0x34, 0x7C, 0xB8, 0x5C, 0x13, 0xC2,
+    0xA0, 0x31, 0x34, 0x79, 0xF8, 0x52, 0xF2, 0xD1, 0xED, 0xC8, 0x62, 0x86, 0x12, 0xF0, 0x4B, 0x97,
+];
+
 /// Applies the ZSTD/LZ4 flavor of the XOR encryption to the given buffer.
 ///
 /// Pass in the data __with__ the identifier+size header. This function will return a slice that can be passed to the decompressor.
 fn unxor(buf: &mut [u8]) -> &[u8] {
-    let xor_size = (buf.len() - 8).clamp(0, 256);
-    for x in buf[8..8 + xor_size].iter_mut() {
-        *x ^= 0x5E;
+    let xor_size = (buf.len() - 9).clamp(0, 256);
+    for (i, x) in buf[8..8 + xor_size].iter_mut().enumerate() {
+        // New encrypted used since the beta
+        *x = !(*x ^ XOR_KEY[i % XOR_KEY.len()]);
+
+        // Old encryption used in the alpha
+        // *x ^= 0x5E;
     }
 
     &buf[8..]

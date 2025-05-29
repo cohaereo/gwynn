@@ -231,11 +231,11 @@ impl PixelFormat {
                 block: wgpu::AstcBlock::B12x12,
                 channel: wgpu::AstcChannel::Hdr,
             },
-            PixelFormat::R32G32B32A32 => return None,
+            PixelFormat::R32G32B32A32 => wgpu::TextureFormat::Rgba32Float,
             PixelFormat::A16B16G16R16 => return None,
             PixelFormat::Pvrtc4Rgba => return None,
-            PixelFormat::R11g11b10 => return None,
-            PixelFormat::R32g32b32a32ui => return None,
+            PixelFormat::R11g11b10 => wgpu::TextureFormat::Rg11b10Float,
+            PixelFormat::R32g32b32a32ui => wgpu::TextureFormat::Rgba32Uint,
             // PixelFormat::A32r32g32b32ui => return None,
         })
     }
