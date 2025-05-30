@@ -5,7 +5,7 @@ mod io;
 mod ui;
 
 use std::{
-    fs::File,
+    fs::{write, File},
     io::Cursor,
     path::{Path, PathBuf},
 };
@@ -206,22 +206,26 @@ impl GwynnApp {
         std::fs::write(&out_file, &decompressed)?;
 
         let mut c = Cursor::new(&decompressed);
+        let _unk0: u32 = c.read_le()?;
 
         let texture_header: TextureHeader = c.read_le()?;
         let mip = texture_header.mips.last().unwrap();
         info!(
-            "{:?} {}x{} / {}x{}",
+            "{:?} {}x{} / {}x{} - type={:?} lod_group={:?}",
             texture_header.format,
             texture_header.width,
             texture_header.height,
             mip.width,
             mip.height,
+            texture_header.texture_type,
+            texture_header.lod_group,
         );
 
         let texture_data =
             gwynn_mpk::compression::decompress(&mut decompressed[mip.data_offset.pos as usize..])?;
 
         let out_file = Path::new("textures").join(&file.name);
+        std::fs::write(out_file.with_extension("raw"), &texture_data)?;
 
         let image_data = match self
             .texture_converter

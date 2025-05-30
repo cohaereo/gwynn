@@ -1,3 +1,4 @@
-target
-LocalData
-dump
+/target
+/LocalData
+/dump
+/textures

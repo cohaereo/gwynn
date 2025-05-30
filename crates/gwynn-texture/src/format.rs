@@ -6,9 +6,9 @@ use binrw::binread;
 pub enum PixelFormat {
     Unknown = 0,
     A32R32G32B32F = 1,
-    R32G32B32A32 = 3,
-    A16B16G16R16 = 4,
-    R8G8B8A8 = 5,
+    A16B16G16R16F = 2,
+    R8G8B8A8 = 3,
+
     B5G6R5 = 6,
     A8L8 = 7,
     G16R16 = 8,
@@ -231,8 +231,7 @@ impl PixelFormat {
                 block: wgpu::AstcBlock::B12x12,
                 channel: wgpu::AstcChannel::Hdr,
             },
-            PixelFormat::R32G32B32A32 => wgpu::TextureFormat::Rgba32Float,
-            PixelFormat::A16B16G16R16 => return None,
+            PixelFormat::A16B16G16R16F => return None,
             PixelFormat::Pvrtc4Rgba => return None,
             PixelFormat::R11g11b10 => wgpu::TextureFormat::Rg11b10Float,
             PixelFormat::R32g32b32a32ui => wgpu::TextureFormat::Rgba32Uint,

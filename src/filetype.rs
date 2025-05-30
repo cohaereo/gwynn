@@ -23,7 +23,7 @@ impl FileType {
             match extension.as_ref() {
                 "mp4" => return Some(Self::Mp4),
                 "anim" => return Some(Self::Animation),
-                "1" | "4" => return Some(Self::Texture),
+                "1" | "4" | "6" => return Some(Self::Texture),
                 "etsb" => return Some(Self::Prefab),
                 "json" => return Some(Self::Json),
                 _ => {}
