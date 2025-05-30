@@ -84,6 +84,7 @@ impl GwynnApp {
 
         cc.egui_ctx
             .style_mut(|s| s.override_font_id = Some(FontId::proportional(14.0)));
+        cc.egui_ctx.set_theme(egui::ThemePreference::Dark);
 
         info!("Indexing package directory");
         let mut root_dir = Directory::new_root();
