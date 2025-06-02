@@ -114,6 +114,11 @@ impl GwynnApp {
                     }
                 };
 
+                if entry.flags & 1 != 0 {
+                    // This is a directory entry, skip it.
+                    continue;
+                }
+
                 let path = Path::new(&entry.path);
                 root_dir.add_file(
                     FileEntry {

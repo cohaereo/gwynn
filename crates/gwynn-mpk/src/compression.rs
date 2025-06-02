@@ -22,6 +22,10 @@ impl CompressionType {
     }
 
     pub fn guess_from_slice(buf: &[u8]) -> Option<CompressionType> {
+        if buf.len() < 4 {
+            return None;
+        }
+
         match &buf[0..4] {
             b"NNNN" => Some(CompressionType::None),
             &[0xe2, 0x06, ..] => Some(CompressionType::Zlib),
