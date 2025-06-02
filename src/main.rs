@@ -9,6 +9,7 @@ use std::{
     fs::{write, File},
     io::Cursor,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use anyhow::Context;
@@ -66,12 +67,16 @@ impl GwynnApp {
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "Inter-Medium".into(),
-            egui::FontData::from_static(include_bytes!("../assets/fonts/Inter-Medium.ttf")),
+            Arc::new(egui::FontData::from_static(include_bytes!(
+                "../assets/fonts/Inter-Medium.ttf"
+            ))),
         );
 
         fonts.font_data.insert(
             "lucide".into(),
-            egui::FontData::from_static(include_bytes!("../assets/fonts/lucide.ttf")),
+            Arc::new(egui::FontData::from_static(include_bytes!(
+                "../assets/fonts/lucide.ttf"
+            ))),
         );
 
         let proportional = fonts
@@ -152,21 +157,13 @@ impl GwynnApp {
                     if ui
                         .selectable_label(
                             false,
-                            RichText::new(format!(
-                                "{} {}",
-                                icon_for_filetype(file.ftype),
-                                file.name
-                            ))
-                            .color(color),
+                            RichText::new(format!("{} {}", file.ftype.icon(), file.name))
+                                .color(color),
                         )
                         .clicked()
                     {
-                        if file.ftype == FileType::Texture {
-                            if let Err(e) = self.extract_texture(file) {
-                                error!("Failed to convert texture: {e}");
-                            }
-                        } else if let Err(e) = self.extract_file(file) {
-                            error!("Failed to extract file: {e}");
+                        if let Err(e) = self.extract_file(file) {
+                            error!("Failed to convert texture: {e}");
                         }
                     }
                 }
@@ -175,6 +172,14 @@ impl GwynnApp {
     }
 
     fn extract_file(&self, file: &FileEntry) -> anyhow::Result<()> {
+        if file.ftype == FileType::Texture {
+            return self.extract_texture(file);
+        }
+
+        self.extract_file_raw(file)
+    }
+
+    fn extract_file_raw(&self, file: &FileEntry) -> anyhow::Result<()> {
         // self.wgpu_renderstate.
         let mut data = File::open(&file.data_file)?;
 
@@ -182,13 +187,14 @@ impl GwynnApp {
         data.seek_read(&mut buf, file.info.offset)?;
 
         info!(
-            "Compression {:?} - {}",
+            "Extracting file '{}' with compression {:?}",
+            &file.info.path,
             gwynn_mpk::compression::CompressionType::guess_from_slice(&buf),
-            &file.info.path
         );
+
         let decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
 
-        let out_file = Path::new("dump").join(&file.name);
+        let out_file = Path::new("dump").join(&file.path);
         std::fs::create_dir_all(out_file.parent().unwrap())?;
         std::fs::write(&out_file, &decompressed)?;
 
@@ -202,13 +208,13 @@ impl GwynnApp {
         data.seek_read(&mut buf, file.info.offset)?;
 
         info!(
-            "Compression {:?} - {}",
+            "Extracting texture '{}' with compression {:?}",
+            &file.info.path,
             gwynn_mpk::compression::CompressionType::guess_from_slice(&buf),
-            &file.info.path
         );
         let mut decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
 
-        let out_file = Path::new("dump").join(&file.name);
+        let out_file = Path::new("dump").join(&file.path);
         std::fs::create_dir_all(out_file.parent().unwrap())?;
         std::fs::write(&out_file, &decompressed)?;
 
@@ -231,8 +237,8 @@ impl GwynnApp {
         let texture_data =
             gwynn_mpk::compression::decompress(&mut decompressed[mip.data_offset.pos as usize..])?;
 
-        let out_file = Path::new("textures").join(&file.name);
-        std::fs::write(out_file.with_extension("raw"), &texture_data)?;
+        let out_file = Path::new("textures").join(&file.path);
+        // std::fs::write(out_file.with_extension("raw"), &texture_data)?;
 
         let image_data = match self
             .texture_converter
@@ -283,19 +289,5 @@ impl eframe::App for GwynnApp {
         });
 
         ctx.request_repaint_after_secs(0.025);
-    }
-}
-
-fn icon_for_filetype(ftype: FileType) -> char {
-    match ftype {
-        FileType::Unknown => ICON_FILE_QUESTION,
-        FileType::Animation => ICON_PERSON_STANDING,
-        FileType::Mp4 => ICON_FILM,
-        FileType::Texture => ICON_IMAGE,
-        FileType::Prefab => ICON_SHAPES,
-        FileType::UnknownMessiah => ICON_CROSS,
-        FileType::Model => ICON_BOX,
-        FileType::Material => ICON_ECLIPSE,
-        FileType::Json => ICON_SETTINGS,
     }
 }
