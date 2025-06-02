@@ -8,7 +8,7 @@ use binrw::binread;
 pub struct EntryHeader {
     #[br(temp)]
     path_len: u32,
-    #[br(map = |v: Vec<u8>| decode_path(&v), count = path_len as usize, dbg)]
+    #[br(map = |v: Vec<u8>| decode_path(&v), count = path_len as usize)]
     pub path: String,
     pub asset_id: u64,
     pub length: u64,
@@ -36,14 +36,12 @@ fn decode_path(bytes: &[u8]) -> String {
     } else {
         let part_size = bytes.len() % 7;
         let mut decoded = String::new();
-        for b in 0..part_size {
-            let byte = bytes[b];
+        for byte in &bytes[0..part_size] {
             let decoded_byte = (byte) ^ 0x2B;
             decoded.push(decoded_byte as char);
         }
 
-        for b in part_size..bytes.len() {
-            let byte = bytes[b];
+        for byte in &bytes[part_size..] {
             let decoded_byte = (byte) ^ 0x35;
             decoded.push(decoded_byte as char);
         }

@@ -136,11 +136,15 @@ impl GwynnApp {
 
     pub fn show_directory(&self, ui: &mut egui::Ui, dir: &Directory) {
         ui.collapsing(
-            RichText::new(format!("{ICON_FOLDER} {}", dir.name)).color(Color32::WHITE),
+            RichText::new(format!("{ICON_FOLDER} {}", dir.name)).color(Color32::LIGHT_BLUE),
             |ui| {
+                for dir in dir.subdirectories.values() {
+                    self.show_directory(ui, dir);
+                }
+
                 for file in dir.files.values() {
                     let color = if file.ftype == FileType::Unknown {
-                        egui::Color32::from_rgb(255, 160, 160)
+                        egui::Color32::GRAY
                     } else {
                         Color32::WHITE
                     };
@@ -256,7 +260,7 @@ impl GwynnApp {
 impl eframe::App for GwynnApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::SidePanel::left("file_selector")
-            .min_width(384.0)
+            .min_width(512.0)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
