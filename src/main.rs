@@ -2,6 +2,7 @@ mod directory;
 mod filetype;
 mod icons;
 mod io;
+mod patchlist;
 mod ui;
 
 use std::{
@@ -40,9 +41,10 @@ fn main() -> anyhow::Result<()> {
         .with(filter)
         .init();
 
-    let mut native_options = eframe::NativeOptions::default();
-    native_options.window_builder =
-        Some(Box::new(|viewport| viewport.with_inner_size((1600., 900.))));
+    let native_options = eframe::NativeOptions {
+        window_builder: Some(Box::new(|viewport| viewport.with_inner_size((1600., 900.)))),
+        ..Default::default()
+    };
 
     eframe::run_native(
         "Gwynn",

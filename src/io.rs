@@ -11,3 +11,5 @@ where
         self.read(buf)
     }
 }
+
+pub struct PatchManager {}
