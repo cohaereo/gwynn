@@ -168,7 +168,31 @@ impl GwynnApp {
                     }
                 }
             },
-        );
+        )
+        .header_response
+        .context_menu(|ui| {
+            if ui.button("Extract all files").clicked() {
+                if let Err(e) = self.extract_directory(dir) {
+                    error!("Failed to extract directory: {e}");
+                }
+            }
+        });
+    }
+
+    pub fn extract_directory(&self, dir: &Directory) -> anyhow::Result<()> {
+        for file in dir.files.values() {
+            if let Err(e) = self.extract_file(file) {
+                error!("Failed to extract file '{}': {e}", file.name);
+            }
+        }
+
+        for subdir in dir.subdirectories.values() {
+            if let Err(e) = self.extract_directory(subdir) {
+                error!("Failed to extract subdirectory '{}': {e}", subdir.name);
+            }
+        }
+
+        Ok(())
     }
 
     fn extract_file(&self, file: &FileEntry) -> anyhow::Result<()> {
@@ -256,6 +280,7 @@ impl GwynnApp {
             mip.height as u32,
             &image_data[..],
         ) {
+            std::fs::create_dir_all(out_file.parent().unwrap())?;
             output_image.save(out_file.with_extension("png"))?;
         }
 
