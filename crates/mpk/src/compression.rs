@@ -3,7 +3,7 @@ use std::{
     io::{Cursor, Read},
 };
 
-use anyhow::{ensure, Ok};
+use anyhow::{ensure, Context, Ok};
 
 #[derive(Debug)]
 pub enum CompressionType {
@@ -21,7 +21,7 @@ impl CompressionType {
         matches!(self, CompressionType::G108Lz4 | CompressionType::G108Zstd)
     }
 
-    pub fn guess_from_slice(buf: &[u8]) -> Option<CompressionType> {
+    pub fn detect_from_slice(buf: &[u8]) -> Option<CompressionType> {
         if buf.len() < 4 {
             return None;
         }
@@ -42,13 +42,13 @@ impl CompressionType {
 /// Decompresses the given buffer.
 ///
 /// This function may modify the given buffer due to the use of in-place XOR encryption.
-pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<[u8]>> {
-    match CompressionType::guess_from_slice(buf) {
+pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<'_, [u8]>> {
+    match CompressionType::detect_from_slice(buf) {
         Some(CompressionType::Zlib) => {
             let input = unxor_zlib(buf);
             let mut decompressor = flate2::read::ZlibDecoder::new(Cursor::new(input));
             let mut result_buf = vec![];
-            decompressor.read_to_end(&mut result_buf)?;
+            decompressor.read_to_end(&mut result_buf).context("zlib")?;
 
             Ok(result_buf.into())
         }
@@ -58,7 +58,8 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<[u8]>> {
             let uncompressed_size = u32::from_le_bytes(v);
             let input = if c.is_g108() { unxor(buf) } else { &buf[8..] };
 
-            let decompressed_bytes = lz4_flex::decompress(input, uncompressed_size as usize)?;
+            let decompressed_bytes =
+                lz4_flex::decompress(input, uncompressed_size as usize).context("lz4 error")?;
 
             Ok(decompressed_bytes.into())
         }
@@ -79,8 +80,13 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<[u8]>> {
 
             let mut out_buf = vec![];
             let mut decompressor = zstd::stream::Decoder::new(Cursor::new(input))?;
-            let decompressed_bytes = decompressor.read_to_end(&mut out_buf)?;
-            ensure!(decompressed_bytes == uncompressed_size as usize);
+            let decompressed_bytes = decompressor
+                .read_to_end(&mut out_buf)
+                .context("zstd error")?;
+            ensure!(
+                decompressed_bytes == uncompressed_size as usize,
+                "zstd: Decompressed size does not match expected size"
+            );
 
             Ok(out_buf.into())
         }

@@ -1,5 +1,4 @@
 pub mod compression;
-pub mod indexer;
 
 use binrw::binread;
 

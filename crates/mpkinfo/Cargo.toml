@@ -1,0 +1,14 @@
+[package]
+name = "gwynn-mpkinfo"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+binrw.workspace = true
+
+# Used for decompression
+gwynn-mpk = { path = "../mpk" }
+
+[dev-dependencies]
+rayon = "1.11.0"

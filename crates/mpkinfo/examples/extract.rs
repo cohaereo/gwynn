@@ -1,0 +1,88 @@
+use std::{
+    fs::File,
+    io::{Read, Seek},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
+fn main() -> anyhow::Result<()> {
+    let path = PathBuf::from_str(&std::env::args().nth(1).expect("No MPK file specified"))?;
+    let mut data = std::fs::read(&path)?;
+    let mut file = std::io::Cursor::new(&mut data);
+
+    let mpk_info: gwynn_mpkinfo::ResourcesHeader = binrw::BinReaderExt::read_le(&mut file)?;
+
+    let mpk_file_count = mpk_info
+        .records
+        .iter()
+        .fold(0, |acc, e| acc.max(e.file_number() + 1));
+
+    let mut mpk_files = (0..mpk_file_count)
+        .map(|i| {
+            let filename = match i {
+                0 => "Resources.mpk".to_string(),
+                _ => format!("Resources{}.mpk", i),
+            };
+
+            File::open(Path::new(&path).with_file_name(filename)).expect("Failed to open MPK file")
+        })
+        .collect::<Vec<_>>();
+
+    std::fs::create_dir_all("mpkinfo_dump")?;
+    mpk_files.iter_mut().enumerate().for_each(|(i, mpk_file)| {
+        for e in mpk_info.records.iter().filter(|e| e.file_number() == i) {
+            if e.is_directory() {
+                continue;
+            }
+
+            let mut output = vec![0u8; e.asset_size as usize];
+            mpk_file
+                .seek(std::io::SeekFrom::Start(e.offset as u64))
+                .expect("Failed to seek");
+            mpk_file.read_exact(&mut output).expect("Failed to read");
+            let decompressed = match gwynn_mpk::compression::decompress(&mut output) {
+                Ok(o) => o,
+                Err(err) => {
+                    println!(
+                        "Failed to decompress {:08X}_{:08X}.{}: {err:?}",
+                        e.file_number(),
+                        e.hash,
+                        e.extension
+                    );
+                    continue;
+                }
+            };
+            std::fs::write(
+                format!(
+                    "mpkinfo_dump/{:08X}_{:08X}.{}",
+                    e.file_number(),
+                    e.hash,
+                    e.extension
+                ),
+                decompressed,
+            )
+            .expect("Failed to write file");
+        }
+    });
+    // for e in mpk_info.records {
+    //     if e.is_directory() {
+    //         continue;
+    //     }
+
+    //     let mut output = vec![0u8; e.asset_size as usize];
+    //     let mpk_file = &mut mpk_files[e.file_number() as usize];
+    //     mpk_file.seek(std::io::SeekFrom::Start(e.offset as u64))?;
+    //     mpk_file.read_exact(&mut output)?;
+    //     std::fs::write(
+    //         format!(
+    //             "mpkinfo_dump/{:08X}_{:08X}.{}",
+    //             e.file_number(),
+    //             e.hash,
+    //             e.extension
+    //         ),
+    //         output,
+    //     )?;
+    // }
+
+    Ok(())
+}

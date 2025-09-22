@@ -222,7 +222,7 @@ impl GwynnApp {
         info!(
             "Extracting file '{}' with compression {:?}",
             &file.info.path,
-            gwynn_mpk::compression::CompressionType::guess_from_slice(&buf),
+            gwynn_mpk::compression::CompressionType::detect_from_slice(&buf),
         );
 
         let decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
@@ -247,7 +247,7 @@ impl GwynnApp {
         info!(
             "Extracting file '{}' with compression {:?}",
             &file.info.path,
-            gwynn_mpk::compression::CompressionType::guess_from_slice(&buf),
+            gwynn_mpk::compression::CompressionType::detect_from_slice(&buf),
         );
 
         let decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
@@ -268,7 +268,7 @@ impl GwynnApp {
         info!(
             "Extracting texture '{}' with compression {:?}",
             &file.info.path,
-            gwynn_mpk::compression::CompressionType::guess_from_slice(&buf),
+            gwynn_mpk::compression::CompressionType::detect_from_slice(&buf),
         );
         let mut decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
 
