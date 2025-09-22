@@ -3,7 +3,8 @@ use std::{
     io::{Cursor, Read},
 };
 
-use anyhow::{ensure, Context, Ok};
+use anyhow::{ensure, Context};
+use tracing::warn;
 
 #[derive(Debug)]
 pub enum CompressionType {
@@ -55,11 +56,22 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<'_, [u8]>> {
         Some(c @ (CompressionType::Lz4 | CompressionType::G108Lz4)) => {
             let mut v = [0u8; 4];
             v.copy_from_slice(&buf[4..8]);
-            let uncompressed_size = u32::from_le_bytes(v);
+            let mut uncompressed_size = u32::from_le_bytes(v) as usize;
             let input = if c.is_g108() { unxor(buf) } else { &buf[8..] };
 
-            let decompressed_bytes =
-                lz4_flex::decompress(input, uncompressed_size as usize).context("lz4 error")?;
+            let decompressed_bytes = loop {
+                match lz4_flex::decompress(input, uncompressed_size) {
+                    Ok(o) => break o,
+                    Err(lz4_flex::block::DecompressError::OutputTooSmall { actual, expected }) => {
+                        uncompressed_size = expected;
+                        warn!("Adjusting LZ4 output buffer from {actual} to {expected} bytes");
+                        continue;
+                    }
+                    Err(e) => {
+                        anyhow::bail!("lz4 error: {e}");
+                    }
+                };
+            };
 
             Ok(decompressed_bytes.into())
         }

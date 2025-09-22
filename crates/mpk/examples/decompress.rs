@@ -10,11 +10,10 @@ fn main() -> anyhow::Result<()> {
     let start = args.offset.unwrap_or(0) as usize;
     let size = args.length.unwrap_or(buf.len() - start);
     let buf = &mut buf[start..start + size];
-    let detected_type = compression::CompressionType::detect_from_slice(buf);
-    if detected_type.is_none() {
+    let Some(detected_type) = compression::CompressionType::detect_from_slice(buf) else {
         anyhow::bail!("Could not detect compression type or file is uncompressed");
-    }
-    println!("Guessed compression type: {:?}", detected_type);
+    };
+    println!("Guessed compression type: {detected_type:?}");
     let decompressed = compression::decompress(buf)?;
     fs::write(&args.output, &decompressed)?;
     println!(
