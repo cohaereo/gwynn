@@ -33,6 +33,7 @@ extern crate tracing;
 fn main() -> anyhow::Result<()> {
     let filter = tracing_subscriber::filter::Targets::new()
         .with_default(tracing::Level::INFO)
+        .with_target("wgpu_hal", tracing::level_filters::LevelFilter::OFF)
         .with_target("wgpu", tracing::Level::WARN);
 
     // Build a new subscriber with the `fmt` layer using the `Targets`
@@ -205,7 +206,35 @@ impl GwynnApp {
             return self.extract_texture(file);
         }
 
+        if file.path.ends_with("etsb") {
+            return self.extract_etsb(file);
+        }
+
         self.extract_file_raw(file)
+    }
+
+    fn extract_etsb(&self, file: &FileEntry) -> anyhow::Result<()> {
+        let mut data = File::open(&file.data_file)?;
+
+        let mut buf = vec![0; file.info.length as usize];
+        data.seek_read(&mut buf, file.info.offset)?;
+
+        info!(
+            "Extracting file '{}' with compression {:?}",
+            &file.info.path,
+            gwynn_mpk::compression::CompressionType::guess_from_slice(&buf),
+        );
+
+        let decompressed = gwynn_mpk::compression::decompress(&mut buf)?.to_vec();
+        let value: serde_json::Value = rmp_serde::from_slice(&decompressed)?;
+
+        let out_file = Path::new("dump")
+            .join(&file.path)
+            .with_extension("etsb.json");
+        std::fs::create_dir_all(out_file.parent().unwrap())?;
+        std::fs::write(&out_file, serde_json::to_string_pretty(&value)?)?;
+
+        Ok(())
     }
 
     fn extract_file_raw(&self, file: &FileEntry) -> anyhow::Result<()> {
