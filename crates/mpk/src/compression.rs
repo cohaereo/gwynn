@@ -76,7 +76,21 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<'_, [u8]>> {
             Ok(decompressed_bytes.into())
         }
         Some(CompressionType::Lzma) => {
-            anyhow::bail!("lzma not supported");
+            let mut v = [0u8; 4];
+            v.copy_from_slice(&buf[4..8]);
+            let uncompressed_size = u32::from_le_bytes(v) as usize;
+
+            let mut reader = std::io::Cursor::new(&buf[8..]);
+            let option = lzma_rs::decompress::Options {
+                unpacked_size: lzma_rs::decompress::UnpackedSize::UseProvided(Some(
+                    uncompressed_size as u64,
+                )),
+                memlimit: None,
+                allow_incomplete: false,
+            };
+            let mut decompressed = Vec::new();
+            lzma_rs::lzma_decompress_with_options(&mut reader, &mut decompressed, &option)?;
+            Ok(decompressed.into())
         }
         Some(c @ (CompressionType::Zstd | CompressionType::G108Zstd)) => {
             let mut v = [0u8; 4];
@@ -113,7 +127,7 @@ const XOR_KEY: &[u8] = &[
 ///
 /// Pass in the data __with__ the identifier+size header. This function will return a slice that can be passed to the decompressor.
 fn unxor(buf: &mut [u8]) -> &[u8] {
-    let xor_size = (buf.len() - 8).clamp(0, 255);
+    let xor_size = (buf.len() - 8).clamp(0, 256);
     for (i, x) in buf[8..8 + xor_size].iter_mut().enumerate() {
         // New encrypted used since the beta
         *x = !(*x ^ XOR_KEY[i % XOR_KEY.len()]);
