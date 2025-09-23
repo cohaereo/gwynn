@@ -71,6 +71,7 @@ fn main() -> anyhow::Result<()> {
                         Some(b"BKHD") => "bnk",
                         Some(b"CCCC") => "ory",
                         Some(b"\x0E\x00Pa") => "particlesystem",
+                        Some([_, 0x0D, 0x0D, 0x0A]) => "pyc",
                         _ => match e.extension.as_str() {
                             e if e.ends_with(".0") => "unk0",
                             e if e.ends_with(".1") => {
