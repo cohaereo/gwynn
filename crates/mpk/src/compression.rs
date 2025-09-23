@@ -29,7 +29,7 @@ impl CompressionType {
 
         match &buf[0..4] {
             b"NNNN" => Some(CompressionType::None),
-            &[0xe2, 0x06, ..] => Some(CompressionType::Zlib),
+            &[0x42, 0xA6, ..] => Some(CompressionType::Zlib),
             b"LZMA" => Some(CompressionType::Lzma),
             b"ZZZ4" => Some(CompressionType::Lz4),
             b"ZSTD" => Some(CompressionType::Zstd),
@@ -137,7 +137,7 @@ fn unxor_zlib(buf: &mut [u8]) -> &[u8] {
     let end = end.min(buf.len());
     let head = &mut buf[..end];
     for x in head.iter_mut() {
-        *x ^= 154;
+        *x ^= 0x3A;
     }
     let end = if end == buf.len() { end } else { buf.len() - 8 };
 
