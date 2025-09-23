@@ -44,6 +44,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     std::fs::create_dir_all("dump")?;
+    std::fs::create_dir_all("dump_failed")?;
     files.par_iter().for_each(|(data_file, file)| {
         let data = File::open(data_file).expect("Failed to open MPK file");
 
@@ -51,18 +52,29 @@ fn main() -> anyhow::Result<()> {
         data.seek_read(&mut buf, file.offset)
             .expect("Failed to read MPK file");
 
+        let buf_orig = buf.clone();
+
         // println!(
         //     "Extracting file '{}' with compression {:?}",
         //     &file.path,
         //     gwynn_mpk::compression::CompressionType::detect_from_slice(&buf),
         // );
 
-        let decompressed = gwynn_mpk::compression::decompress(&mut buf)
-            .expect("Failed to decompress MPK file")
-            .to_vec();
-        let out_path = Path::new("dump").join(&file.path);
-        std::fs::create_dir_all(out_path.parent().unwrap()).expect("Failed to create directories");
-        std::fs::write(&out_path, &decompressed).expect("Failed to write output file");
+        match gwynn_mpk::compression::decompress(&mut buf) {
+            Ok(o) => {
+                let out_path = Path::new("dump").join(&file.path);
+                std::fs::create_dir_all(out_path.parent().unwrap())
+                    .expect("Failed to create directories");
+                std::fs::write(&out_path, &o).expect("Failed to write output file");
+            }
+            Err(e) => {
+                eprintln!("Failed to decompress MPK file '{}': {}", &file.path, e);
+                let out_path = Path::new("dump_failed").join(&file.path);
+                std::fs::create_dir_all(out_path.parent().unwrap())
+                    .expect("Failed to create directories");
+                std::fs::write(&out_path, &buf_orig).expect("Failed to write output file");
+            }
+        }
     });
 
     Ok(())
