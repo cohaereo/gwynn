@@ -76,25 +76,22 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<'_, [u8]>> {
             Ok(decompressed_bytes.into())
         }
         Some(CompressionType::Lzma) => {
-            todo!("lzma");
+            anyhow::bail!("lzma not supported");
         }
         Some(c @ (CompressionType::Zstd | CompressionType::G108Zstd)) => {
             let mut v = [0u8; 4];
             v.copy_from_slice(&buf[4..8]);
             let uncompressed_size = u32::from_le_bytes(v);
-            let input = if c.is_g108() {
-                unxor(buf);
-                buf[0..4].copy_from_slice(b"ZSTD");
-                &buf[8..]
-            } else {
-                &buf[8..]
-            };
+            let input = if c.is_g108() { unxor(buf) } else { &buf[8..] };
 
             let mut out_buf = vec![];
             let mut decompressor = zstd::stream::Decoder::new(Cursor::new(input))?;
-            let decompressed_bytes = decompressor
-                .read_to_end(&mut out_buf)
-                .context("zstd error")?;
+            let decompressed_bytes = match decompressor.read_to_end(&mut out_buf) {
+                Ok(o) => o,
+                Err(e) => {
+                    anyhow::bail!("zstd read error: {e}");
+                }
+            };
             ensure!(
                 decompressed_bytes == uncompressed_size as usize,
                 "zstd: Decompressed size does not match expected size"
@@ -116,7 +113,7 @@ const XOR_KEY: &[u8] = &[
 ///
 /// Pass in the data __with__ the identifier+size header. This function will return a slice that can be passed to the decompressor.
 fn unxor(buf: &mut [u8]) -> &[u8] {
-    let xor_size = (buf.len() - 9).clamp(0, 256);
+    let xor_size = (buf.len() - 8).clamp(0, 255);
     for (i, x) in buf[8..8 + xor_size].iter_mut().enumerate() {
         // New encrypted used since the beta
         *x = !(*x ^ XOR_KEY[i % XOR_KEY.len()]);
