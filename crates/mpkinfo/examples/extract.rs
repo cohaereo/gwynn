@@ -5,6 +5,8 @@ use std::{
     str::FromStr,
 };
 
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+
 fn main() -> anyhow::Result<()> {
     let path = PathBuf::from_str(&std::env::args().nth(1).expect("No MPK file specified"))?;
     let mut data = std::fs::read(&path)?;
@@ -29,41 +31,81 @@ fn main() -> anyhow::Result<()> {
         .collect::<Vec<_>>();
 
     std::fs::create_dir_all("mpkinfo_dump")?;
-    mpk_files.iter_mut().enumerate().for_each(|(i, mpk_file)| {
-        for e in mpk_info.records.iter().filter(|e| e.file_number() == i) {
-            if e.is_directory() {
-                continue;
-            }
+    mpk_files
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(i, mpk_file)| {
+            for e in mpk_info.records.iter().filter(|e| e.file_number() == i) {
+                if e.is_directory() {
+                    continue;
+                }
 
-            let mut output = vec![0u8; e.asset_size as usize];
-            mpk_file
-                .seek(std::io::SeekFrom::Start(e.offset as u64))
-                .expect("Failed to seek");
-            mpk_file.read_exact(&mut output).expect("Failed to read");
-            let decompressed = match gwynn_mpk::compression::decompress(&mut output) {
-                Ok(o) => o,
-                Err(err) => {
-                    println!(
-                        "Failed to decompress {:08X}_{:08X}.{}: {err:?}",
+                let mut output = vec![0u8; e.asset_size as usize];
+                mpk_file
+                    .seek(std::io::SeekFrom::Start(e.offset as u64))
+                    .expect("Failed to seek");
+                mpk_file.read_exact(&mut output).expect("Failed to read");
+                let decompressed = match gwynn_mpk::compression::decompress(&mut output) {
+                    Ok(o) => o,
+                    Err(err) => {
+                        println!(
+                            "Failed to decompress {:08X}_{:08X}.{}: {err}",
+                            e.file_number(),
+                            e.hash,
+                            e.extension
+                        );
+                        continue;
+                    }
+                };
+
+                let dir = if let Some(mime) = infer::get(&decompressed) {
+                    mime.extension()
+                } else {
+                    match decompressed.get(0..4) {
+                        Some(b".MES") => {
+                            continue; // Skipping MESSIAH files for now since they are large and numerous
+                        }
+                        Some(b"\xC1\x59\x41\x0D") => "json",
+                        Some(b"N\xA1BA") | Some(b"eN\xA1B") => "nim",
+                        Some(b"AKPK") => "pck",
+                        Some(b"BKHD") => "bnk",
+                        Some(b"CCCC") => "ory",
+                        Some(b"\x0E\x00Pa") => "particlesystem",
+                        _ => match e.extension.as_str() {
+                            e if e.ends_with(".0") => "unk0",
+                            e if e.ends_with(".1") => {
+                                continue;
+                                // "tex1"
+                            }
+                            e if e.ends_with(".4") => {
+                                continue;
+                                // "tex4"
+                            }
+                            "nfo" => "nfo",
+                            "son" => "json",
+                            "onb" => "onb",
+                            "csb" => "csb",
+                            "ist" => "plist",
+                            _ => "unknown",
+                        },
+                    }
+                };
+
+                std::fs::create_dir_all(format!("mpkinfo_dump/{dir}"))
+                    .expect("Failed to create output directory");
+
+                std::fs::write(
+                    format!(
+                        "mpkinfo_dump/{dir}/{:08X}_{:08X}.{}",
                         e.file_number(),
                         e.hash,
                         e.extension
-                    );
-                    continue;
-                }
-            };
-            std::fs::write(
-                format!(
-                    "mpkinfo_dump/{:08X}_{:08X}.{}",
-                    e.file_number(),
-                    e.hash,
-                    e.extension
-                ),
-                decompressed,
-            )
-            .expect("Failed to write file");
-        }
-    });
+                    ),
+                    decompressed,
+                )
+                .expect("Failed to write file");
+            }
+        });
     // for e in mpk_info.records {
     //     if e.is_directory() {
     //         continue;

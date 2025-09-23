@@ -11,4 +11,6 @@ binrw.workspace = true
 gwynn-mpk = { path = "../mpk" }
 
 [dev-dependencies]
+infer = "0.19.0"
 rayon = "1.11.0"
+tree_magic_mini = "3.2.0"
