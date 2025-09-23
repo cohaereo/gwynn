@@ -1,6 +1,8 @@
 /target
 /LocalData
 /dump
+/dump_failed
+/pyc_dump
 /mpkinfo_dump
 /textures
 /apk
