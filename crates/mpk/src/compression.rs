@@ -57,9 +57,10 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<'_, [u8]>> {
             let mut v = [0u8; 4];
             v.copy_from_slice(&buf[4..8]);
             let mut uncompressed_size = u32::from_le_bytes(v) as usize;
+            let real_uncompressed_size = uncompressed_size;
             let input = if c.is_g108() { unxor(buf) } else { &buf[8..] };
 
-            let decompressed_bytes = loop {
+            let mut decompressed_bytes = loop {
                 match lz4_flex::decompress(input, uncompressed_size) {
                     Ok(o) => break o,
                     Err(lz4_flex::block::DecompressError::OutputTooSmall { actual, expected }) => {
@@ -72,6 +73,8 @@ pub fn decompress(buf: &mut [u8]) -> anyhow::Result<Cow<'_, [u8]>> {
                     }
                 };
             };
+
+            decompressed_bytes.truncate(real_uncompressed_size);
 
             Ok(decompressed_bytes.into())
         }
