@@ -229,7 +229,7 @@ impl TextureConverter {
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_bytes_per_row as u32),
-                    rows_per_image: Some(texture_size.height as u32),
+                    rows_per_image: Some(texture_size.height),
                 },
             },
             texture_size,
@@ -239,7 +239,7 @@ impl TextureConverter {
         let buffer_slice = output_buffer.slice(..);
         buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
 
-        self.device.poll(wgpu::PollType::Wait);
+        self.device.poll(wgpu::PollType::Wait)?;
 
         let padded_data = buffer_slice.get_mapped_range();
 
@@ -259,8 +259,8 @@ fn compute_work_group_count(
     (width, height): (u32, u32),
     (workgroup_width, workgroup_height): (u32, u32),
 ) -> (u32, u32) {
-    let x = (width + workgroup_width - 1) / workgroup_width;
-    let y = (height + workgroup_height - 1) / workgroup_height;
+    let x = width.div_ceil(workgroup_width);
+    let y = height.div_ceil(workgroup_height);
 
     (x, y)
 }

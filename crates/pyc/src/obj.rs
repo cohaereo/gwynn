@@ -1,7 +1,5 @@
-use anyhow::Context;
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::{
-    collections::HashSet,
     io::{Read, Seek},
     ops::{Deref, DerefMut},
 };
@@ -102,23 +100,23 @@ pub fn read_obj<R: Read + Seek>(reader: &mut ObjectReader<R>) -> anyhow::Result<
     const TYPE_NONE: u8 = b'N';
     const TYPE_FALSE: u8 = b'F';
     const TYPE_TRUE: u8 = b'T';
-    const TYPE_STOPITER: u8 = b'S';
+    const _TYPE_STOPITER: u8 = b'S';
     const TYPE_ELLIPSIS: u8 = b'.';
     const TYPE_INT: u8 = b'i';
-    const TYPE_FLOAT: u8 = b'f';
+    const _TYPE_FLOAT: u8 = b'f';
     const TYPE_BINARY_FLOAT: u8 = b'g';
-    const TYPE_COMPLEX: u8 = b'x';
+    const _TYPE_COMPLEX: u8 = b'x';
     const TYPE_BINARY_COMPLEX: u8 = b'y';
     const TYPE_LONG: u8 = b'l';
     const TYPE_STRING: u8 = b's';
-    const TYPE_INTERNED: u8 = b't';
+    const _TYPE_INTERNED: u8 = b't';
     const TYPE_REF: u8 = b'r';
     const TYPE_TUPLE: u8 = b'(';
     const TYPE_LIST: u8 = b'[';
     const TYPE_DICT: u8 = b'{';
     const TYPE_CODE: u8 = b'c';
     const TYPE_UNICODE: u8 = b'u';
-    const TYPE_UNKNOWN: u8 = b'?';
+    const _TYPE_UNKNOWN: u8 = b'?';
     const TYPE_SET: u8 = b'<';
     const TYPE_FROZENSET: u8 = b'>';
     const TYPE_ASCII: u8 = b'a';
