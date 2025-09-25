@@ -29,6 +29,7 @@ pub enum Object {
     Tuple(Vec<Object>),
     List(Vec<Object>),
     Set(Vec<Object>),
+    Dictionary(Vec<(Object, Object)>),
 
     Ref(u32),
 
@@ -61,6 +62,10 @@ impl Object {
 
     pub fn to_string(&self) -> Option<String> {
         self.as_string().map(|s| s.to_string())
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Object::Null)
     }
 }
 
@@ -184,6 +189,18 @@ pub fn read_obj<R: Read + Seek>(reader: &mut ObjectReader<R>) -> anyhow::Result<
                 .map(|_| read_obj(reader))
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(Object::Tuple(objs))
+        }
+        TYPE_DICT => {
+            let mut items = Vec::new();
+            loop {
+                let key = read_obj(reader)?;
+                if key.is_null() {
+                    break;
+                }
+                let value = read_obj(reader)?;
+                items.push((key, value));
+            }
+            Ok(Object::Dictionary(items))
         }
         TYPE_SMALL_TUPLE => {
             let l = reader.read_u8()?;

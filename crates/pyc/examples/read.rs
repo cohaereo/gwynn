@@ -115,11 +115,19 @@ fn print_obj(refs: &[Object], obj: &Object, indent: usize) {
                 std::fs::write("pyc_dump/bytes_large.bin", data);
                 return;
             }
-            println!(
-                "{indent_str}ByteString (len={}) {}",
-                data.len(),
-                hex::encode(data)
-            );
+            if let Some(s) = std::str::from_utf8(data).ok() {
+                if s.chars()
+                    .all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+                {
+                    println!("{indent_str}ByteString (len={}): b'{:?}'", data.len(), s);
+                }
+            } else {
+                println!(
+                    "{indent_str}ByteString (len={}) {}",
+                    data.len(),
+                    hex::encode(data)
+                );
+            }
         }
         Object::String(s) => {
             println!("{indent_str}String: {:?}", s);
@@ -130,5 +138,12 @@ fn print_obj(refs: &[Object], obj: &Object, indent: usize) {
         }
         Object::Float(_) => todo!(),
         Object::Complex(_, _) => todo!(),
+        Object::Dictionary(entries) => {
+            println!("{indent_str}Dictionary (len={}):", entries.len());
+            for (k, v) in entries {
+                print_obj(refs, k, indent + 1);
+                print_obj(refs, v, indent + 2);
+            }
+        }
     }
 }

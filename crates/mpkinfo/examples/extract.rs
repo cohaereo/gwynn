@@ -19,11 +19,12 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .fold(0, |acc, e| acc.max(e.file_number() + 1));
 
+    let base_filename = path.file_stem().unwrap().to_str().unwrap();
     let mut mpk_files = (0..mpk_file_count)
         .map(|i| {
             let filename = match i {
-                0 => "Resources.mpk".to_string(),
-                _ => format!("Resources{}.mpk", i),
+                0 => format!("{base_filename}.mpk"),
+                _ => format!("{base_filename}{i}.mpk"),
             };
 
             File::open(Path::new(&path).with_file_name(filename)).expect("Failed to open MPK file")
@@ -40,12 +41,14 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 }
 
-                let mut output = vec![0u8; e.asset_size as usize];
+                let mut data = vec![0u8; e.asset_size as usize];
                 mpk_file
                     .seek(std::io::SeekFrom::Start(e.offset as u64))
                     .expect("Failed to seek");
-                mpk_file.read_exact(&mut output).expect("Failed to read");
-                let decompressed = match gwynn_mpk::compression::decompress(&mut output) {
+
+                let hash = md5::compute(&data);
+                mpk_file.read_exact(&mut data).expect("Failed to read");
+                let decompressed = match gwynn_mpk::compression::decompress(&mut data) {
                     Ok(o) => o,
                     Err(err) => {
                         println!(
@@ -57,6 +60,16 @@ fn main() -> anyhow::Result<()> {
                         continue;
                     }
                 };
+                let hash_decompressed = md5::compute(&decompressed);
+                println!(
+                    "{:08X}_{:08X}.{} - size: {} - md5: {:x} (decompressed: {:x})",
+                    e.file_number(),
+                    e.hash,
+                    e.extension,
+                    e.asset_size,
+                    hash,
+                    hash_decompressed
+                );
 
                 let dir = if let Some(mime) = infer::get(&decompressed) {
                     mime.extension()
