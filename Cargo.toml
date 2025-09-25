@@ -10,6 +10,7 @@ members = [
     "crates/model",
     "crates/mpkinfo",
     "crates/pyc",
+    "crates/fs",
 ]
 
 [workspace.dependencies]
@@ -29,7 +30,6 @@ gwynn-texture = { path = "./crates/texture" }
 anyhow.workspace = true
 # binrw.workspace = true
 eframe = { version = "0.32.3", default-features = false, features = ["wgpu"] }
-# eframe = { version = "0.32.3", default-features = false, features = ["glow"] }
 egui = "0.32.3"
 # glob = "0.3.1"
 # hashbrown.workspace = true
