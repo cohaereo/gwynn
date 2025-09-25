@@ -21,7 +21,7 @@ pub struct TextureConverter {
 
 impl TextureConverter {
     pub fn new() -> anyhow::Result<Self> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::GL,
             ..Default::default()
         });
@@ -43,18 +43,16 @@ impl TextureConverter {
             warn!("GPU does not support ASTC textures. Decoding will be done on the CPU");
         };
 
-        let (device, queue) = block_on(adapter.request_device(
-            &DeviceDescriptor {
-                label: Some("Texture Converter Device"),
-                required_features: features,
-                required_limits: Limits {
-                    max_texture_dimension_2d: 4096,
-                    ..Limits::downlevel_defaults()
-                },
-                memory_hints: wgpu::MemoryHints::Performance,
+        let (device, queue) = block_on(adapter.request_device(&DeviceDescriptor {
+            label: Some("Texture Converter Device"),
+            required_features: features,
+            required_limits: Limits {
+                max_texture_dimension_2d: 4096,
+                ..Limits::downlevel_defaults()
             },
-            None,
-        ))?;
+            memory_hints: wgpu::MemoryHints::Performance,
+            ..Default::default()
+        }))?;
 
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Texture converter shader"),
@@ -65,7 +63,7 @@ impl TextureConverter {
             label: Some("Texture converter pipeline"),
             layout: None,
             module: &shader,
-            entry_point: "convert_main",
+            entry_point: Some("convert_main"),
             compilation_options: PipelineCompilationOptions::default(),
             cache: None,
         });
@@ -220,15 +218,15 @@ impl TextureConverter {
         });
 
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 aspect: wgpu::TextureAspect::All,
                 texture: &output_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &output_buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_bytes_per_row as u32),
                     rows_per_image: Some(texture_size.height as u32),
@@ -241,7 +239,7 @@ impl TextureConverter {
         let buffer_slice = output_buffer.slice(..);
         buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
 
-        self.device.poll(wgpu::Maintain::Wait);
+        self.device.poll(wgpu::PollType::Wait);
 
         let padded_data = buffer_slice.get_mapped_range();
 

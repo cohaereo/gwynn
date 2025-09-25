@@ -36,7 +36,7 @@ impl LoadingCircle {
                     brightness,
                     brightness,
                     brightness,
-                    (((1. - scale) * 222.0) as u8),
+                    ((1. - scale) * 222.0) as u8,
                 ),
             );
         }
