@@ -6,18 +6,28 @@ use ext4::Ext4Reader;
 pub struct MumuPlayer;
 
 impl MumuPlayer {
-    pub const BASE_PATH: &str = "C:\\Program Files\\Netease\\MuMuPlayer";
+    fn base_path() -> anyhow::Result<PathBuf> {
+        let appdata =
+            std::env::var_os("APPDATA").context("APPDATA environment variable not set")?;
+        let path = PathBuf::from(appdata)
+            .join("Netease")
+            .join("MuMuPlayerGlobal")
+            .join("install_config.json");
 
-    fn base_path() -> &'static Path {
-        Path::new(Self::BASE_PATH)
+        serde_json::from_reader::<std::fs::File, serde_json::Value>(std::fs::File::open(&path)?)
+            .context("Failed to read MuMuPlayer install_config.json")?
+            .get("product")
+            .and_then(|v| v.get("install_dir").and_then(|v| v.as_str()))
+            .map(PathBuf::from)
+            .context("MuMuPlayer install_path not found or invalid")
     }
 
-    fn vms_path() -> PathBuf {
-        Self::base_path().join("vms")
+    fn vms_path() -> anyhow::Result<PathBuf> {
+        Ok(Self::base_path()?.join("vms"))
     }
 
     pub fn iter_vms() -> anyhow::Result<impl Iterator<Item = PathBuf>> {
-        let vms_path = Self::vms_path();
+        let vms_path = Self::vms_path()?;
         if !vms_path.exists() {
             anyhow::bail!("MuMuPlayer vms path does not exist: {}", vms_path.display());
         }

@@ -20,3 +20,4 @@ zip = { version = "5.1.1", default-features = false, features = [
 ] }
 uuid.workspace = true
 binrw.workspace = true
+serde_json = "1.0.145"
