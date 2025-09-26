@@ -1058,7 +1058,7 @@ checksum = "dea2df4cf52843e0452895c455a1a2cfbb842a1e7329671acf418fdc53ed4c59"
 [[package]]
 name = "ext4"
 version = "0.1.0"
-source = "git+https://github.com/cohaereo/vdi-rs.git#92cdb4d12aa8cce4c22ce37aaeaa12f92f663aa4"
+source = "git+https://github.com/cohaereo/vdi-rs.git#e5b8b709b91735ce3dacc443155096356ccbce03"
 dependencies = [
  "bytemuck",
  "positioned-io2",
@@ -1416,6 +1416,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "base64",
+ "binrw",
  "bootsector",
  "ext4",
  "gwynn-mpk",
@@ -1423,6 +1424,7 @@ dependencies = [
  "log",
  "thiserror 2.0.16",
  "unix_path",
+ "uuid",
  "vdi",
  "zip",
 ]

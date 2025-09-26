@@ -29,7 +29,7 @@ impl InstalledApp {
 }
 
 pub fn scan_for_apps<R: ReadAt>(fs: &Ext4Reader<R>) -> anyhow::Result<Vec<InstalledApp>> {
-    let mut app_dirs: Vec<ext4::DirectoryEntry> = vec![];
+    let mut app_dirs: Vec<ext4::structs::DirectoryEntry> = vec![];
     let mut add_dir = |path: &str| {
         if let Ok(entries) = fs.read_dir(path) {
             app_dirs.extend(entries);

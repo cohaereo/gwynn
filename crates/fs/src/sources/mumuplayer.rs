@@ -36,7 +36,7 @@ impl MumuPlayer {
                 let metadata = std::fs::metadata(&mpk_path)?;
                 let size = metadata.len();
                 if biggest.is_none() || size > biggest.as_ref().unwrap().1 {
-                    biggest = Some((mpk_path, size));
+                    biggest = Some((vm_path, size));
                 }
             }
         }

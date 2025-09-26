@@ -15,4 +15,8 @@ log = "0.4.28"
 thiserror = "2"
 unix_path = "1.0.1"
 vdi = "0.2.0"
-zip = { version = "5.1.1", default-features = false, features = ["deflate-zopfli"] }
+zip = { version = "5.1.1", default-features = false, features = [
+    "deflate-zopfli",
+] }
+uuid.workspace = true
+binrw.workspace = true
