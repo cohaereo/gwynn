@@ -1,18 +1,14 @@
-use std::io::Cursor;
-
 use anyhow::Context;
 use futures::executor::block_on;
-use tracing::{debug, warn};
+use log::{debug, warn};
 use wgpu::{
-    util::DeviceExt, ComputePipelineDescriptor, DeviceDescriptor, Extent3d, Features, Limits,
-    PipelineCompilationOptions, RequestAdapterOptions, ShaderModuleDescriptor, TextureDescriptor,
-    TextureUsages,
+    ComputePipelineDescriptor, DeviceDescriptor, Extent3d, Features, Limits,
+    PipelineCompilationOptions, RequestAdapterOptions, ShaderModuleDescriptor,
 };
 
-use crate::TextureHeader;
+use crate::Texture;
 
 pub struct TextureConverter {
-    _instance: wgpu::Instance,
     device: wgpu::Device,
     queue: wgpu::Queue,
 
@@ -69,7 +65,6 @@ impl TextureConverter {
         });
 
         Ok(Self {
-            _instance: instance,
             device,
             queue,
             pipeline,
@@ -77,81 +72,19 @@ impl TextureConverter {
     }
 
     /// Converts the given texture data to RGBA8888
-    pub fn convert(&self, data: &[u8], header: &TextureHeader) -> anyhow::Result<Vec<u8>> {
+    pub fn convert(&self, data: &[u8]) -> anyhow::Result<Vec<u8>> {
         debug!("Converting texture");
 
-        if header.format.is_hdr() {
+        let texture = Texture::load(&self.device, &self.queue, data)?;
+        if texture.header.format.is_hdr() {
             anyhow::bail!("HDR textures are not supported");
         }
 
-        if header.format.is_astc()
-            && !self
-                .device
-                .features()
-                .contains(Features::TEXTURE_COMPRESSION_ASTC)
-        {
-            debug!("Using ASTC software decoder");
-            let mut image = vec![0u8; header.width as usize * header.height as usize * 4];
-            astc_decode::astc_decode(
-                Cursor::new(&data),
-                header.width as _,
-                header.height as _,
-                header.format.astc_footprint().unwrap(),
-                |x, y, pixel| {
-                    let offset = (y * header.width as u32 + x) as usize * 4;
-                    image[offset..offset + 4].copy_from_slice(&pixel);
-                },
-            )?;
-
-            return Ok(image);
-        };
-
-        let format = header.format.to_wgpu().with_context(|| {
-            format!(
-                "No suitable WGPU format found for format {:?}",
-                header.format
-            )
-        })?;
-
-        let block_size = format.block_dimensions();
         let texture_size = Extent3d {
-            width: header.width as _,
-            height: header.height as _,
-            ..Default::default()
+            width: texture.header.width as _,
+            height: texture.header.height as _,
+            depth_or_array_layers: 1,
         };
-        let texture_size_aligned = Extent3d {
-            width: (header.width as f32 / block_size.0 as f32).ceil() as u32 * block_size.0,
-            height: (header.height as f32 / block_size.1 as f32).ceil() as u32 * block_size.1,
-            ..Default::default()
-        };
-
-        let block_count: u32 = (texture_size_aligned.width / block_size.0)
-            * (texture_size_aligned.height / block_size.1);
-        let block_size = format.block_copy_size(None).unwrap_or(1);
-
-        if data.len() < (block_count * block_size) as usize {
-            anyhow::bail!("Insufficient data for texture conversion");
-        }
-
-        if format.has_depth_aspect() {
-            anyhow::bail!("Depth textures are not supported");
-        }
-
-        let input_texture = self.device.create_texture_with_data(
-            &self.queue,
-            &TextureDescriptor {
-                label: None,
-                size: texture_size_aligned,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage: TextureUsages::TEXTURE_BINDING,
-                view_formats: &[format],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            data,
-        );
 
         // Create an output texture
         let output_texture = self.device.create_texture(&wgpu::TextureDescriptor {
@@ -171,9 +104,7 @@ impl TextureConverter {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(
-                        &input_texture.create_view(&wgpu::TextureViewDescriptor::default()),
-                    ),
+                    resource: wgpu::BindingResource::TextureView(&texture.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -189,8 +120,10 @@ impl TextureConverter {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         {
-            let (dispatch_with, dispatch_height) =
-                compute_work_group_count((texture_size.width, texture_size.height), (16, 16));
+            let (dispatch_with, dispatch_height) = compute_work_group_count(
+                (texture.header.width as u32, texture.header.height as u32),
+                (16, 16),
+            );
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Copy pass"),
                 timestamp_writes: None,
@@ -202,13 +135,11 @@ impl TextureConverter {
 
         debug!("Downloading converted texture data");
 
-        // Get the result.
-
-        let padded_bytes_per_row = padded_bytes_per_row(texture_size.width);
-        let unpadded_bytes_per_row = texture_size.width as usize * 4;
+        let padded_bytes_per_row = padded_bytes_per_row(texture.header.width as u32);
+        let unpadded_bytes_per_row = texture.header.width as usize * 4;
 
         let output_buffer_size = padded_bytes_per_row as u64
-            * texture_size.height as u64
+            * texture.header.height as u64
             * std::mem::size_of::<u8>() as u64;
         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -229,7 +160,7 @@ impl TextureConverter {
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_bytes_per_row as u32),
-                    rows_per_image: Some(texture_size.height),
+                    rows_per_image: Some(texture.header.height as u32),
                 },
             },
             texture_size,

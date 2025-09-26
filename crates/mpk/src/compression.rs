@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{ensure, Context};
-use tracing::warn;
+use log::warn;
 
 #[derive(Debug)]
 pub enum CompressionType {

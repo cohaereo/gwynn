@@ -4,9 +4,11 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+gwynn-mpk = { path = "../mpk" }
+
 astc-decode = { git = "https://github.com/wwylele/astc-decode" }
 anyhow.workspace = true
 binrw.workspace = true
 futures = "0.3.31"
-tracing.workspace = true
+log.workspace = true
 wgpu.workspace = true

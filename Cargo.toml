@@ -18,7 +18,7 @@ anyhow = "1.0"
 binrw = "0.15"
 bytemuck = "1.23"
 hashbrown = "0.16.0"
-tracing = "0.1.40"
+log = "0.4.28"
 wgpu = "25"
 uuid = "1.18"
 
@@ -45,8 +45,11 @@ egui = "0.32.3"
 
 subsecond = "0.7.0-rc.0"
 dioxus-devtools = "0.7.0-rc.0"
-log = "0.4.28"
+log.workspace = true
 env_logger = "0.11.8"
+linked-hash-map = "0.5.6"
+uuid.workspace = true
+crossbeam = "0.8.4"
 
 [profile.server-dev]
 inherits = "dev"

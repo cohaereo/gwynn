@@ -8,9 +8,9 @@ anyhow.workspace = true
 binrw.workspace = true
 flate2 = "1.1.2"
 hashbrown.workspace = true
+log.workspace = true
 lz4_flex = "0.11.5"
 lzma-rs = "0.3.0"
-tracing.workspace = true
 uuid.workspace = true
 zstd = "0.13.3"
 

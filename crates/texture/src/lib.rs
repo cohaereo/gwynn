@@ -1,166 +1,109 @@
+use std::{borrow::Cow, io::Cursor};
+
+use anyhow::Context;
+use binrw::BinReaderExt;
+use log::debug;
+use wgpu::util::DeviceExt;
+
+use crate::structs::TextureHeader;
+
 pub mod converter;
 pub mod format;
+pub mod structs;
 
-use std::io::SeekFrom;
-
-use binrw::binread;
-use format::PixelFormat;
-
-#[binread]
-#[derive(Debug)]
-#[repr(C)]
-pub struct TextureHeader {
-    pub mag_filter: SamplerFilter,
-    pub min_filter: SamplerFilter,
-    pub mip_filter: SamplerFilter,
-    pub address_u: SampleAddress,
-    pub address_v: SampleAddress,
-    pub format: PixelFormat,
-    pub mip_level: u8,
-    pub flags: u8,
-    pub compression_preset: TextureCompression,
-    pub lod_group: TextureLodGroup,
-    pub mip_gen_preset: TextureMipGen,
-    pub texture_type: TextureType,
-    pub width: u16,
-    pub height: u16,
-    pub default_color: [f32; 4],
-    pub size: u32,
-    pub unk: u16,
-    pub mip_count: u16,
-
-    #[br(count = mip_count as usize)]
-    pub mips: Vec<MipHeader>,
+/// Represents a Messiah texture loaded onto the GPU
+pub struct Texture {
+    pub texture: wgpu::Texture,
+    pub view: wgpu::TextureView,
+    pub header: TextureHeader,
 }
 
-#[binread]
-#[derive(Debug)]
-pub struct MipHeader {
-    #[br(temp)]
-    data_start: binrw::PosValue<()>,
+impl Texture {
+    /// Load a texture from raw Messiah texture file data
+    pub fn load(device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8]) -> anyhow::Result<Self> {
+        let mut c = Cursor::new(&data);
+        let _unk0: u32 = c.read_le()?;
 
-    /// Total mip data size, header + (compressed) data
-    pub total_size: u32,
+        let header: TextureHeader = c.read_le()?;
+        let mip = header.mips.last().context("Texture has no mips?")?;
 
-    pub width: u16,
-    pub height: u16,
-    pub unk0: u16,
-    pub unk1: u16,
-    /// ⚠ This is the length of the uncompressed data. The compression magic/header are not included in this number
-    pub data_size: u32,
-    pub data_offset: binrw::PosValue<()>,
+        let mut data = data[mip.data_offset.pos as usize..].to_vec();
+        let texture_data = gwynn_mpk::compression::decompress(&mut data)?;
+        let texture_data = if header.format.is_astc()
+            && !device
+                .features()
+                .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC)
+        {
+            debug!("Using ASTC software decoder");
+            let mut image = vec![0u8; header.width as usize * header.height as usize * 4];
+            astc_decode::astc_decode(
+                Cursor::new(&data),
+                header.width as _,
+                header.height as _,
+                header.format.astc_footprint().unwrap(),
+                |x, y, pixel| {
+                    let offset = (y * header.width as u32 + x) as usize * 4;
+                    image[offset..offset + 4].copy_from_slice(&pixel);
+                },
+            )?;
 
-    #[br(seek_before(SeekFrom::Start(data_start.pos + total_size as u64)))]
-    pub data_end: binrw::PosValue<()>,
-}
+            Cow::Owned(image)
+        } else {
+            texture_data
+        };
 
-#[binread]
-#[br(repr(u8))]
-#[derive(Debug)]
-pub enum SamplerFilter {
-    None = 0,
-    Point = 1,
-    Linear = 2,
-    Anisotropic = 3,
-}
+        let format = header.format.to_wgpu().with_context(|| {
+            format!(
+                "No suitable WGPU format found for format {:?}",
+                header.format
+            )
+        })?;
 
-#[binread]
-#[br(repr(u8))]
-#[derive(Debug)]
-pub enum SampleAddress {
-    None = 0,
-    Wrap = 1,
-    Mirror = 2,
-    Clamp = 3,
-    FromTexture = 4,
-}
+        let block_size = format.block_dimensions();
+        let texture_size_aligned = wgpu::Extent3d {
+            width: (header.width as f32 / block_size.0 as f32).ceil() as u32 * block_size.0,
+            height: (header.height as f32 / block_size.1 as f32).ceil() as u32 * block_size.1,
+            ..Default::default()
+        };
 
-#[binread]
-#[br(repr(u8))]
-#[derive(Debug)]
-pub enum SampleQuality {
-    None = 0,
-    Sample2x = 1,
-    Sample4x = 2,
-    Sample8x = 3,
-}
+        let block_count: u32 = (texture_size_aligned.width / block_size.0)
+            * (texture_size_aligned.height / block_size.1);
+        let block_size = format.block_copy_size(None).unwrap_or(1);
 
-#[binread]
-#[br(repr(u8))]
-#[derive(Debug)]
-pub enum TextureType {
-    Texture1D = 0,
-    Texture2D = 1,
-    Texture3D = 2,
-    Cube = 3,
-    Texture2DArray = 4,
-    CubeArray = 5,
-    Array = 6,
-}
+        if texture_data.len() < (block_count * block_size) as usize {
+            anyhow::bail!("Insufficient data for texture conversion");
+        }
 
-#[binread]
-#[br(repr(u8))]
-#[derive(Debug)]
-pub enum TextureCompression {
-    Default = 0,
-    NormalMap = 1,
-    DisplacementMap = 2,
-    Grayscale = 3,
-    HDR = 4,
-    NormalMapUncompress = 5,
-    NormalMapBC5 = 6,
-    VectorMap = 7,
-    Uncompressed = 8,
-    LightMap = 9,
-    EnvMap = 10,
-    MixMap = 11,
-    UI = 12,
-    TerrainBlock = 13,
-    TerrainIndex = 14,
-    NormalMapCompact = 15,
-    BC6H = 16,
-    BC7 = 17,
-    LightProfile = 18,
-    LUTHDR = 19,
-    LUTLOG = 20,
-    TerrainNormalMap = 21,
-}
+        if format.has_depth_aspect() {
+            anyhow::bail!("Depth textures are not supported");
+        }
 
-#[binread]
-#[br(repr(u8))]
-#[derive(Debug)]
-pub enum TextureLodGroup {
-    World = 0,
-    WorldNormalMap = 1,
-    WorldSpecular = 2,
-    Character = 3,
-    CharacterNormalMap = 4,
-    CharacterSpecular = 5,
-    Weapon = 6,
-    WeaponNormalMap = 7,
-    WeaponSpecular = 8,
-    Cinematic = 9,
-    Effect = 10,
-    EffectUnfiltered = 11,
-    Sky = 12,
-    Gui = 13,
-    RenderTarget = 14,
-    ShadowMap = 15,
-    LUT = 16,
-    TerrainBlockMap = 17,
-    TerrainIndexMap = 18,
-    TerrainLightMap = 19,
-    ImageBaseReflection = 20,
-}
+        let texture = device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: None,
+                size: texture_size_aligned,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[format],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            texture_data.as_ref(),
+        );
 
-#[binread]
-#[br(repr(u8))]
-#[derive(Debug)]
-pub enum TextureMipGen {
-    FromTextureGroup = 0,
-    Simple = 1,
-    Sharpen = 2,
-    NoMip = 3,
-    Blur = 4,
-    AlphaDistribution = 5,
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        Ok(Self {
+            texture,
+            view,
+            header,
+        })
+    }
+
+    pub fn aspect_ratio(&self) -> f32 {
+        self.header.width as f32 / self.header.height as f32
+    }
 }

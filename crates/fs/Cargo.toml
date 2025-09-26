@@ -11,7 +11,8 @@ anyhow.workspace = true
 base64 = "0.22.1"
 bootsector = "0.2.0"
 ext4 = { git = "https://github.com/cohaereo/vdi-rs.git" }
+log = "0.4.28"
 thiserror = "2"
 unix_path = "1.0.1"
 vdi = "0.2.0"
-log = "0.4.28"
+zip = { version = "5.1.1", default-features = false, features = ["deflate-zopfli"] }

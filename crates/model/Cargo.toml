@@ -7,4 +7,4 @@ edition = "2021"
 anyhow.workspace = true
 binrw.workspace = true
 bytemuck.workspace = true
-tracing.workspace = true
+log.workspace = true
